@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PONG NEO - 火龙觉醒版</title>
+    <style>
+        :root {
+            --neon-blue: #0ff;
+            --neon-pink: #f66;
+            --neon-green: #0f8;
+            --neon-fire: #ff6600;
+            --bg-dark: #0a0a1a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
+        body {
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+            background: var(--bg-dark); color: #fff; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            overflow: hidden; background: radial-gradient(circle at center, #1a0a2e 0%, #0a0a1a 100%);
+        }
+        .game-container {
+            text-align: center; position: relative; width: 98vw; max-width: 832px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        h1 {
+            margin-bottom: 5px; font-weight: 200; letter-spacing: 12px;
+            text-shadow: 0 0 15px var(--neon-blue); font-size: clamp(1.5rem, 5vw, 2.5rem);
+        }
+        .top-ui { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 20px; }
+        .score-board {
+            font-size: clamp(1.5rem, 6vw, 3rem);
+            font-family: 'Courier New', Courier, monospace; letter-spacing: 12px;
+        }
+        #playerScore { color: var(--neon-green); text-shadow: 0 0 10px var(--neon-green); }
+        #computerScore { color: var(--neon-pink); text-shadow: 0 0 10px var(--neon-pink); }
+
+        .special-gauge {
+            font-size: 0.8rem; color: var(--neon-fire); border: 1px solid var(--neon-fire);
+            padding: 4px 12px; border-radius: 20px; box-shadow: 0 0 10px rgba(255, 102, 0, 0.3);
+        }
+
+        .canvas-wrapper {
+            position: relative; width: 100%; aspect-ratio: 2/1;
+            box-shadow: 0 0 60px rgba(0,0,0,0.9), 0 0 30px rgba(0,255,255,0.15);
+            border: 3px solid #333; border-radius: 12px; overflow: hidden;
+        }
+        #gameCanvas { width: 100%; height: 100%; background: #000; display: block; }
+
+        .ui-overlay {
+            margin-top: 15px; width: 100%; display: flex; flex-direction: column; gap: 10px;
+        }
+        .difficulty-group { display: flex; justify-content: center; gap: 8px; }
+        .btn {
+            padding: 8px 16px; border-radius: 6px; border: 1px solid #444;
+            background: #222; color: #aaa; cursor: pointer; font-size: 0.85rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 1px;
+        }
+        .btn:hover { background: #333; color: #fff; border-color: #666; }
+        .btn.active {
+            background: var(--neon-blue); color: #000; font-weight: bold;
+            box-shadow: 0 0 15px var(--neon-blue); border-color: var(--neon-blue);
+        }
+
+        .main-actions { display: flex; gap: 12px; justify-content: center; margin-top: 5px; }
+        .start-btn { background: var(--neon-green); color: #000; border: none; font-weight: bold; min-width: 120px; }
+        .stop-btn { background: transparent; border: 1px solid var(--neon-pink); color: var(--neon-pink); }
+        .start-btn:hover { box-shadow: 0 0 25px var(--neon-green); transform: scale(1.05); }
+
+        .hint-container { margin-top: 8px; }
+        .controls-hint { opacity: 0.6; font-size: 0.8rem; letter-spacing: 1px; color: #0cf; }
+        .special-hint {
+            color: var(--neon-fire); font-size: 0.85rem; margin-top: 4px; font-weight: bold;
+            text-shadow: 0 0 5px rgba(255, 102, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>NEO PONG • 觉醒</h1>
+
+        <div class="top-ui">
+            <div class="special-gauge">火龙招式: <span id="specialCount">30</span> / 30</div>
+            <div class="score-board">
+                <span id="playerScore">00</span><span style="opacity:0.3">:</span><span id="computerScore">00</span>
+            </div>
+            <div style="width: 100px; text-align: right; font-size: 0.8rem; opacity: 0.5;">[ P1 ]</div>
+        </div>
+
+        <div class="canvas-wrapper" id="shakeWrapper">
+            <canvas id="gameCanvas" width="832" height="416"></canvas>
+        </div>
+
+        <div class="ui-overlay">
+            <div class="difficulty-group">
+                <button class="btn" id="easy" onclick="game.setDiff('easy')">休闲</button>
+                <button class="btn active" id="medium" onclick="game.setDiff('medium')">标准</button>
+                <button class="btn" id="hard" onclick="game.setDiff('hard')">大师</button>
+            </div>
+            <div class="main-actions">
+                <button class="btn start-btn" id="startBtn" onclick="game.start()">开始比赛</button>
+                <button class="btn stop-btn" onclick="game.resetMatch()">重置局分</button>
+            </div>
+            <div class="hint-container">
+                <p class="controls-hint">W/S 或 ↑/↓ 控制移动 | 触摸屏幕滑动</p>
+                <p class="special-hint">【 空格键 】释放：火龙高速球 (每局30次)</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class PongGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d', { alpha: false });
+                this.shakeWrapper = document.getElementById('shakeWrapper');
+
+                // Config (Size: 832x416)
+                this.width = 832; this.height = 416;
+                this.diffs = {
+                    easy: { aiSpeed: 300, error: 80, ballSpeed: 450 },
+                    medium: { aiSpeed: 450, error: 40, ballSpeed: 550 },
+                    hard: { aiSpeed: 650, error: 5, ballSpeed: 700 }
+                };
+                this.curDiff = 'medium';
+
+                // State
+                this.running = false;
+                this.lastTime = 0;
+                this.shakeTime = 0;
+                this.particles = [];
+                this.specialCharges = 30;
+                this.isFireMode = false;
+
+                // Objects (Scaled)
+                this.ball = { x: 416, y: 208, r: 6, sx: 0, sy: 0, trail: [] };
+                this.p1 = { x: 20, y: 168, w: 10, h: 80, s: 0, color: '#0f8' };
+                this.p2 = { x: 802, y: 168, w: 10, h: 80, s: 0, color: '#f66' };
+
+                this.keys = {};
+                this.touchY = null;
+
+                this.bgCanvas = document.createElement('canvas');
+                this.bgCanvas.width = this.width; this.bgCanvas.height = this.height;
+                this.renderBgCache();
+
+                this.initAudio();
+                this.initEvents();
+                this.draw();
+            }
+
+            initAudio() {
+                this.audioCtx = null;
+                const resumeAudio = () => {
+                    if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+                };
+                window.addEventListener('click', resumeAudio, { once: true });
+                window.addEventListener('touchstart', resumeAudio, { once: true });
+            }
+
+            beep(f, d, vol = 0.1) {
+                if (!this.audioCtx) return;
+                const o = this.audioCtx.createOscillator(), g = this.audioCtx.createGain();
+                o.type = this.isFireMode ? 'sawtooth' : 'sine';
+                o.frequency.setValueAtTime(f, this.audioCtx.currentTime);
+                g.gain.setValueAtTime(vol, this.audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + d);
+                o.connect(g); g.connect(this.audioCtx.destination);
+                o.start(); o.stop(this.audioCtx.currentTime + d);
+            }
+
+            initEvents() {
+                window.onkeydown = e => {
+                    const key = e.key.toLowerCase();
+                    this.keys[key] = true;
+                    if (key === ' ' || key === 'spacebar') {
+                        if (!this.running) {
+                            this.start();
+                        } else {
+                            this.triggerSpecial();
+                        }
+                        e.preventDefault();
+                    }
+                };
+                window.onkeyup = e => this.keys[e.key.toLowerCase()] = false;
+
+                this.canvas.addEventListener('touchstart', e => {
+                    this.touchY = e.touches[0].clientY;
+                    if (!this.running) this.start();
+                    e.preventDefault();
+                }, { passive: false });
+
+                this.canvas.addEventListener('touchmove', e => {
+                    if (this.touchY !== null) {
+                        const delta = e.touches[0].clientY - this.touchY;
+                        this.p1.y = Math.max(0, Math.min(this.height - this.p1.h, this.p1.y + delta));
+                        this.touchY = e.touches[0].clientY;
+                    }
+                    e.preventDefault();
+                }, { passive: false });
+
+                this.canvas.addEventListener('touchend', () => this.touchY = null);
+            }
+
+            triggerSpecial() {
+                if (this.specialCharges > 0 && !this.isFireMode && this.ball.sx < 0) {
+                    this.isFireMode = true;
+                    this.specialCharges--;
+                    document.getElementById('specialCount').innerText = this.specialCharges;
+
+                    // Fire effect: Reverse and boost speed instantly
+                    this.ball.sx = Math.abs(this.ball.sx) * 3;
+                    this.shake(0.5, 12);
+                    this.beep(800, 0.4, 0.2);
+                    this.spawnParticles(this.ball.x, this.ball.y, '#ff6600', 30);
+                }
+            }
+
+            setDiff(d) {
+                if (this.running && this.p1.s + this.p2.s > 0) return;
+                this.curDiff = d;
+                document.querySelectorAll('.btn').forEach(b => b.classList.toggle('active', b.id === d));
+            }
+
+            renderBgCache() {
+                const bctx = this.bgCanvas.getContext('2d');
+                bctx.fillStyle = '#000'; bctx.fillRect(0,0,this.width,this.height);
+                bctx.strokeStyle = '#222'; bctx.lineWidth = 2; bctx.setLineDash([15, 15]);
+                bctx.beginPath(); bctx.moveTo(this.width/2, 0); bctx.lineTo(this.width/2, this.height); bctx.stroke();
+
+                // Side lines
+                bctx.strokeStyle = '#1a1a1a'; bctx.setLineDash([]); bctx.lineWidth = 1;
+                bctx.strokeRect(5, 5, this.width-10, this.height-10);
+            }
+
+            spawnParticles(x, y, color, count = 10) {
+                for(let i=0; i<count; i++) {
+                    this.particles.push({
+                        x, y, color,
+                        vx: (Math.random()-0.5) * 15,
+                        vy: (Math.random()-0.5) * 15,
+                        life: 1.0,
+                        size: Math.random() * 3 + 1
+                    });
+                }
+            }
+
+            shake(dur = 0.2, intensity = 5) {
+                this.shakeTime = dur;
+                this.shakeIntensity = intensity;
+            }
+
+            resetBall(dir = 1) {
+                const d = this.diffs[this.curDiff];
+                this.ball.x = this.width/2; this.ball.y = this.height/2;
+                this.ball.sx = dir * d.ballSpeed;
+                this.ball.sy = (Math.random() * 2 - 1) * d.ballSpeed;
+                this.ball.trail = [];
+                this.isFireMode = false;
+            }
+
+            update(dt) {
+                if (this.shakeTime > 0) {
+                    this.shakeTime -= dt;
+                    const s = this.shakeIntensity || 5;
+                    this.shakeWrapper.style.transform = `translate(${(Math.random()-0.5)*s}px, ${(Math.random()-0.5)*s}px)`;
+                } else {
+                    this.shakeWrapper.style.transform = '';
+                }
+
+                // Particles
+                this.particles.forEach(p => {
+                    p.x += p.vx; p.y += p.vy; p.life -= dt * 1.5;
+                });
+                this.particles = this.particles.filter(p => p.life > 0);
+
+                // Player Move
+                const pSpeed = 600;
+                if (this.keys.w || this.keys.arrowup) this.p1.y -= pSpeed * dt;
+                if (this.keys.s || this.keys.arrowdown) this.p1.y += pSpeed * dt;
+                this.p1.y = Math.max(0, Math.min(this.height - this.p1.h, this.p1.y));
+
+                // AI Move
+                const d = this.diffs[this.curDiff];
+                let targetY = this.height/2 - this.p2.h/2;
+                if (this.ball.sx > 0) {
+                    const predictionError = (Math.sin(Date.now()/400) * d.error);
+                    targetY = this.ball.y - this.p2.h/2 + predictionError;
+                }
+                const dist = targetY - this.p2.y;
+                this.p2.y += dist * (d.aiSpeed/100) * dt * 10;
+                this.p2.y = Math.max(0, Math.min(this.height - this.p2.h, this.p2.y));
+
+                // Ball Physics
+                this.ball.x += this.ball.sx * dt;
+                this.ball.y += this.ball.sy * dt;
+
+                // Trail
+                this.ball.trail.push({x: this.ball.x, y: this.ball.y, fire: this.isFireMode});
+                if (this.ball.trail.length > (this.isFireMode ? 20 : 12)) this.ball.trail.shift();
+
+                // Fire mode extra particles
+                if (this.isFireMode && Math.random() > 0.5) {
+                    this.spawnParticles(this.ball.x, this.ball.y, '#ffaa00', 1);
+                }
+
+                // Wall bounce
+                if (this.ball.y < this.ball.r || this.ball.y > this.height - this.ball.r) {
+                    this.ball.sy *= -1;
+                    this.ball.y = this.ball.y < this.ball.r ? this.ball.r : this.height - this.ball.r;
+                    this.beep(this.isFireMode ? 400 : 200, 0.05);
+                    if (this.isFireMode) this.shake(0.1, 3);
+                }
+
+                // Paddle collision
+                const paddle = this.ball.sx < 0 ? this.p1 : this.p2;
+                if (this.ball.x + this.ball.r > paddle.x && this.ball.x - this.ball.r < paddle.x + paddle.w &&
+                    this.ball.y + this.ball.r > paddle.y && this.ball.y - this.ball.r < paddle.y + paddle.h) {
+
+                    const hitNormal = (this.ball.y - (paddle.y + paddle.h/2)) / (paddle.h/2);
+
+                    if (this.isFireMode && paddle === this.p2) {
+                        this.isFireMode = false;
+                        this.ball.sx = -Math.abs(this.ball.sx) / 2.5;
+                    } else {
+                        this.ball.sx = (this.ball.sx < 0 ? 1 : -1) * Math.min(Math.abs(this.ball.sx) * 1.05, 1200);
+                    }
+
+                    this.ball.sy = 700 * hitNormal;
+                    this.ball.x = this.ball.sx > 0 ? paddle.x + paddle.w + this.ball.r : paddle.x - this.ball.r;
+
+                    this.shake(this.isFireMode ? 0.3 : 0.2, this.isFireMode ? 10 : 5);
+                    this.spawnParticles(this.ball.x, this.ball.y, paddle.color, 15);
+                    this.beep(400 + Math.abs(hitNormal)*300, 0.1);
+                }
+
+                // Score
+                if (this.ball.x < 0 || this.ball.x > this.width) {
+                    const win = this.ball.x > this.width;
+                    win ? this.p1.s++ : this.p2.s++;
+                    this.updateScoreUI();
+                    this.beep(win ? 600 : 150, 0.3, 0.2);
+                    this.shake(0.4, 15);
+                    if (this.p1.s >= 10 || this.p2.s >= 10) return this.endGame(this.p1.s >= 10);
+                    this.resetBall(win ? -1 : 1);
+                }
+            }
+
+            updateScoreUI() {
+                document.getElementById('playerScore').innerText = this.p1.s.toString().padStart(2, '0');
+                document.getElementById('computerScore').innerText = this.p2.s.toString().padStart(2, '0');
+            }
+
+            draw() {
+                this.ctx.drawImage(this.bgCanvas, 0, 0);
+
+                // Particles
+                this.particles.forEach(p => {
+                    this.ctx.globalAlpha = p.life;
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2);
+                    this.ctx.fill();
+                });
+                this.ctx.globalAlpha = 1;
+
+                // Ball Trail
+                this.ball.trail.forEach((t, i) => {
+                    const ratio = i / this.ball.trail.length;
+                    this.ctx.fillStyle = t.fire ? `rgba(255,100,0,${ratio})` : `rgba(255,255,255,${ratio*0.3})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(t.x, t.y, this.ball.r * (t.fire ? 1.5 : 1) * ratio, 0, Math.PI*2);
+                    this.ctx.fill();
+                });
+
+                // Neon Objects
+                this.drawNeonRect(this.p1.x, this.p1.y, this.p1.w, this.p1.h, this.p1.color);
+                this.drawNeonRect(this.p2.x, this.p2.y, this.p2.w, this.p2.h, this.p2.color);
+
+                // Ball
+                const ballColor = this.isFireMode ? '#ff6600' : '#fff';
+                this.ctx.fillStyle = ballColor;
+                this.ctx.shadowBlur = this.isFireMode ? 24 : 12;
+                this.ctx.shadowColor = ballColor;
+                this.ctx.beginPath();
+                this.ctx.arc(this.ball.x, this.ball.y, this.ball.r * (this.isFireMode ? 1.2 : 1), 0, Math.PI*2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            }
+
+            drawNeonRect(x, y, w, h, color) {
+                this.ctx.shadowBlur = 12; this.ctx.shadowColor = color;
+                this.ctx.fillStyle = color;
+                this.ctx.fillRect(x, y, w, h);
+                this.ctx.shadowBlur = 0;
+            }
+
+            loop(t) {
+                if (!this.running) return;
+                const dt = Math.min((t - this.lastTime)/1000, 0.1);
+                this.lastTime = t;
+                this.update(dt);
+                this.draw();
+                requestAnimationFrame(t => this.loop(t));
+            }
+
+            start() {
+                if (this.running) return;
+                if (this.p1.s >= 10 || this.p2.s >= 10) {
+                    this.p1.s = this.p2.s = 0;
+                    this.updateScoreUI();
+                }
+                this.specialCharges = 30;
+                document.getElementById('specialCount').innerText = '30';
+                this.running = true;
+                this.lastTime = performance.now();
+                this.resetBall();
+                requestAnimationFrame(t => this.loop(t));
+                document.getElementById('startBtn').innerText = '比赛进行中';
+            }
+
+            resetMatch() {
+                this.running = false;
+                this.p1.s = this.p2.s = 0;
+                this.p1.y = 168; this.p2.y = 168;
+                this.specialCharges = 30;
+                document.getElementById('specialCount').innerText = '30';
+                this.updateScoreUI();
+                this.draw();
+                document.getElementById('startBtn').innerText = '开始比赛';
+            }
+
+            endGame(win) {
+                this.running = false;
+                this.ctx.fillStyle = 'rgba(0,0,0,0.9)';
+                this.ctx.fillRect(0,0,this.width,this.height);
+                this.ctx.fillStyle = win ? '#0f8' : '#f66';
+                this.ctx.font = 'bold 48px PingFang SC';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(win ? '凯旋归来' : '再接再厉', this.width/2, 210);
+                this.ctx.font = '18px PingFang SC';
+                this.ctx.fillStyle = '#aaa';
+                this.ctx.fillText('按空格键或点击开始重新挑战', this.width/2, 270);
+                document.getElementById('startBtn').innerText = '再次挑战';
+            }
+        }
+
+        const game = new PongGame();
+    </script>
+</body>
+</html>
