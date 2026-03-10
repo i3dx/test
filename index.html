@@ -131,6 +131,7 @@
                 this.particles = [];
                 this.specialCharges = 30;
                 this.isFireMode = false;
+                this.server = 2; // 1=玩家, 2=电脑, 初始电脑发球
 
                 // Objects (Scaled)
                 this.ball = { x: 416, y: 208, r: 6, sx: 0, sy: 0, trail: [] };
@@ -199,13 +200,18 @@
             }
 
             triggerSpecial() {
-                if (this.specialCharges > 0 && !this.isFireMode && this.ball.sx < 0) {
+                if (this.specialCharges > 0 && !this.isFireMode) {
                     this.isFireMode = true;
                     this.specialCharges--;
                     document.getElementById('specialCount').innerText = this.specialCharges;
 
-                    // Fire effect: Reverse and boost speed instantly
-                    this.ball.sx = Math.abs(this.ball.sx) * 3;
+                    if (this.ball.sx < 0) {
+                        // 球飞往玩家时：反转方向并加速3倍，飞向电脑
+                        this.ball.sx = -this.ball.sx * 3;
+                    } else {
+                        // 球飞往电脑时：只加速，不反转（让球更快飞向电脑）
+                        this.ball.sx = Math.abs(this.ball.sx) * 3;
+                    }
                     this.shake(0.5, 12);
                     this.beep(800, 0.4, 0.2);
                     this.spawnParticles(this.ball.x, this.ball.y, '#ff6600', 30);
@@ -248,9 +254,19 @@
 
             resetBall(dir = 1) {
                 const d = this.diffs[this.curDiff];
-                this.ball.x = this.width/2; this.ball.y = this.height/2;
-                this.ball.sx = dir * d.ballSpeed;
-                this.ball.sy = (Math.random() * 2 - 1) * d.ballSpeed;
+                // 发球位置改为发球方拍子位置
+                if (this.server === 1) {
+                    // 玩家发球：从玩家拍子位置发出
+                    this.ball.x = this.p1.x + this.p1.w + this.ball.r + 10;
+                    this.ball.y = this.p1.y + this.p1.h / 2;
+                } else {
+                    // 电脑发球：从电脑拍子位置发出
+                    this.ball.x = this.p2.x - this.ball.r - 10;
+                    this.ball.y = this.p2.y + this.p2.h / 2;
+                }
+                // 球向接球方飞去
+                this.ball.sx = (this.server === 1 ? 1 : -1) * d.ballSpeed;
+                this.ball.sy = (Math.random() * 2 - 1) * d.ballSpeed * 0.5;
                 this.ball.trail = [];
                 this.isFireMode = false;
             }
@@ -338,7 +354,9 @@
                     this.beep(win ? 600 : 150, 0.3, 0.2);
                     this.shake(0.4, 15);
                     if (this.p1.s >= 10 || this.p2.s >= 10) return this.endGame(this.p1.s >= 10);
-                    this.resetBall(win ? -1 : 1);
+                    // 失败方发球
+                    this.server = win ? 2 : 1;
+                    this.resetBall();
                 }
             }
 
@@ -410,6 +428,8 @@
                 document.getElementById('specialCount').innerText = '30';
                 this.running = true;
                 this.lastTime = performance.now();
+                // 初始由电脑发球
+                this.server = 2;
                 this.resetBall();
                 requestAnimationFrame(t => this.loop(t));
                 document.getElementById('startBtn').innerText = '比赛进行中';
@@ -420,6 +440,7 @@
                 this.p1.s = this.p2.s = 0;
                 this.p1.y = 168; this.p2.y = 168;
                 this.specialCharges = 30;
+                this.server = 2; // 重置为电脑发球
                 document.getElementById('specialCount').innerText = '30';
                 this.updateScoreUI();
                 this.draw();
