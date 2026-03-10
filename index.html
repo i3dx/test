@@ -118,11 +118,11 @@
                 // Config (Size: 832x416)
                 this.width = 832; this.height = 416;
                 this.diffs = {
-                    easy: { aiSpeed: 300, error: 80, ballSpeed: 450 },
-                    medium: { aiSpeed: 450, error: 40, ballSpeed: 550 },
-                    hard: { aiSpeed: 650, error: 5, ballSpeed: 700 }
+                    easy: { aiSpeed: 220, error: 120, ballSpeed: 380 },
+                    medium: { aiSpeed: 320, error: 70, ballSpeed: 480 },
+                    hard: { aiSpeed: 480, error: 25, ballSpeed: 620 }
                 };
-                this.curDiff = 'medium';
+                this.curDiff = 'easy';
 
                 // State
                 this.running = false;
@@ -174,12 +174,8 @@
                 window.onkeydown = e => {
                     const key = e.key.toLowerCase();
                     this.keys[key] = true;
-                    if (key === ' ' || key === 'spacebar') {
-                        if (!this.running) {
-                            this.start();
-                        } else {
-                            this.triggerSpecial();
-                        }
+                    if ((key === ' ' || key === 'spacebar') && this.running) {
+                        this.triggerSpecial();
                         e.preventDefault();
                     }
                 };
@@ -187,7 +183,6 @@
 
                 this.canvas.addEventListener('touchstart', e => {
                     this.touchY = e.touches[0].clientY;
-                    if (!this.running) this.start();
                     e.preventDefault();
                 }, { passive: false });
 
@@ -324,7 +319,7 @@
                         this.isFireMode = false;
                         this.ball.sx = -Math.abs(this.ball.sx) / 2.5;
                     } else {
-                        this.ball.sx = (this.ball.sx < 0 ? 1 : -1) * Math.min(Math.abs(this.ball.sx) * 1.05, 1200);
+                        this.ball.sx = (this.ball.sx < 0 ? 1 : -1) * Math.min(Math.abs(this.ball.sx) * 1.02, 900);
                     }
 
                     this.ball.sy = 700 * hitNormal;
@@ -433,16 +428,154 @@
 
             endGame(win) {
                 this.running = false;
-                this.ctx.fillStyle = 'rgba(0,0,0,0.9)';
-                this.ctx.fillRect(0,0,this.width,this.height);
-                this.ctx.fillStyle = win ? '#0f8' : '#f66';
-                this.ctx.font = 'bold 48px PingFang SC';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText(win ? '凯旋归来' : '再接再厉', this.width/2, 210);
-                this.ctx.font = '18px PingFang SC';
-                this.ctx.fillStyle = '#aaa';
-                this.ctx.fillText('按空格键或点击开始重新挑战', this.width/2, 270);
+                this.playEndAnimation(win);
+            }
+
+            playEndAnimation(win) {
+                const startTime = performance.now();
+                const duration = 4000;
+                const particles = [];
+                const texts = [];
+
+                // 创建结束特效粒子
+                const createParticles = () => {
+                    const colors = win ? ['#0f8', '#4ff', '#0a0', '#8f0'] : ['#f66', '#f84', '#f40', '#f00'];
+                    for (let i = 0; i < 150; i++) {
+                        const angle = (Math.PI * 2 * i) / 150 + Math.random() * 0.5;
+                        const speed = Math.random() * 300 + 100;
+                        particles.push({
+                            x: this.width / 2,
+                            y: this.height / 2,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            life: 1.0,
+                            size: Math.random() * 6 + 2,
+                            color: colors[Math.floor(Math.random() * colors.length)],
+                            delay: Math.random() * 500
+                        });
+                    }
+                };
+
+                // 创建文字效果
+                const createTexts = () => {
+                    const mainText = win ? '凯旋归来' : '再接再厉';
+                    const subText = win ? '恭喜获胜' : '不要气馁';
+                    const chars = mainText.split('');
+
+                    chars.forEach((char, i) => {
+                        texts.push({
+                            char,
+                            x: this.width / 2 + (i - chars.length / 2 + 0.5) * 55,
+                            y: 150,
+                            targetY: 200,
+                            scale: 0,
+                            targetScale: 1,
+                            delay: i * 100 + 300,
+                            alpha: 0
+                        });
+                    });
+
+                    texts.push({
+                        char: subText,
+                        x: this.width / 2,
+                        y: 300,
+                        targetY: 280,
+                        scale: 0.5,
+                        targetScale: 1,
+                        delay: 800,
+                        alpha: 0,
+                        isSub: true
+                    });
+                };
+
+                createParticles();
+                createTexts();
+
+                const animate = (time) => {
+                    const elapsed = time - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+
+                    // 清除画布 - 渐变黑屏效果
+                    this.ctx.fillStyle = `rgba(0, 0, 0, ${0.02 + progress * 0.08})`;
+                    this.ctx.fillRect(0, 0, this.width, this.height);
+
+                    // 绘制中心光环
+                    const ringRadius = Math.min(progress * 500, 300);
+                    const ringAlpha = progress < 0.3 ? progress * 3 : 1 - (progress - 0.3) * 0.4;
+                    const ringColor = win ? `rgba(15, 255, 136, ${ringAlpha})` : `rgba(255, 102, 102, ${ringAlpha})`;
+
+                    this.ctx.strokeStyle = ringColor;
+                    this.ctx.lineWidth = 4;
+                    this.ctx.shadowBlur = 30;
+                    this.ctx.shadowColor = ringColor;
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.width / 2, this.height / 2, ringRadius * (0.8 + Math.sin(elapsed * 0.003) * 0.1), 0, Math.PI * 2);
+                    this.ctx.stroke();
+
+                    // 绘制粒子
+                    particles.forEach(p => {
+                        if (elapsed < p.delay) return;
+                        const pProgress = (elapsed - p.delay) / (duration - p.delay);
+                        if (pProgress > 1) return;
+
+                        const x = p.x + p.vx * pProgress;
+                        const y = p.y + p.vy * pProgress + 100 * pProgress * pProgress; // 重力效果
+                        const size = p.size * (1 - pProgress * 0.8);
+                        const alpha = 1 - pProgress;
+
+                        this.ctx.fillStyle = p.color;
+                        this.ctx.globalAlpha = alpha;
+                        this.ctx.shadowBlur = 10;
+                        this.ctx.shadowColor = p.color;
+                        this.ctx.beginPath();
+                        this.ctx.arc(x, y, size, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    });
+
+                    // 绘制文字
+                    texts.forEach(t => {
+                        if (elapsed < t.delay) return;
+                        const tProgress = Math.min((elapsed - t.delay) / 600, 1);
+                        const easeOut = 1 - Math.pow(1 - tProgress, 3);
+
+                        const currentY = t.y + (t.targetY - t.y) * easeOut;
+                        const currentScale = t.scale + (t.targetScale - t.scale) * easeOut;
+                        const alpha = Math.sin(tProgress * Math.PI * 0.5);
+
+                        this.ctx.save();
+                        this.ctx.translate(t.x, currentY);
+                        this.ctx.scale(currentScale, currentScale);
+                        this.ctx.globalAlpha = alpha;
+                        this.ctx.fillStyle = t.isSub ? '#aaa' : (win ? '#0f8' : '#f66');
+                        this.ctx.font = t.isSub ? 'bold 28px PingFang SC' : 'bold 64px PingFang SC';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.shadowBlur = t.isSub ? 10 : 25;
+                        this.ctx.shadowColor = win ? '#0f8' : '#f66';
+                        this.ctx.fillText(t.char, 0, 0);
+                        this.ctx.restore();
+                    });
+
+                    // 重新提示文字
+                    if (progress > 0.6) {
+                        const hintAlpha = (progress - 0.6) * 2.5;
+                        this.ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(hintAlpha, 0.6)})`;
+                        this.ctx.font = '16px PingFang SC';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.shadowBlur = 0;
+                        this.ctx.fillText('点击"再次挑战"开始', this.width / 2, 350);
+                    }
+
+                    this.ctx.globalAlpha = 1;
+                    this.ctx.shadowBlur = 0;
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+
+                requestAnimationFrame(animate);
                 document.getElementById('startBtn').innerText = '再次挑战';
+                this.beep(win ? 880 : 220, 0.5, 0.3);
             }
         }
 
