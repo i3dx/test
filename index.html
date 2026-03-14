@@ -102,7 +102,7 @@
                 <button class="btn stop-btn" onclick="game.resetMatch()">重置局分</button>
             </div>
             <div class="hint-container">
-                <p class="controls-hint">W/S 或 ↑/↓ 控制移动 | 触摸屏幕滑动</p>
+                <p class="controls-hint">W/S 或 ↑/↓ 控制移动 | 鼠标移动控制 | 触摸滑动</p>
                 <p class="special-hint">【 空格键 】释放：火龙高速球 (每局30次)</p>
             </div>
         </div>
@@ -172,6 +172,7 @@
             }
 
             initEvents() {
+                // 键盘事件
                 window.onkeydown = e => {
                     const key = e.key.toLowerCase();
                     this.keys[key] = true;
@@ -182,6 +183,7 @@
                 };
                 window.onkeyup = e => this.keys[e.key.toLowerCase()] = false;
 
+                // 触摸事件
                 this.canvas.addEventListener('touchstart', e => {
                     this.touchY = e.touches[0].clientY;
                     e.preventDefault();
@@ -197,6 +199,22 @@
                 }, { passive: false });
 
                 this.canvas.addEventListener('touchend', () => this.touchY = null);
+
+                // 鼠标事件
+                this.canvas.addEventListener('mousemove', e => {
+                    if (!this.running) return;
+                    const rect = this.canvas.getBoundingClientRect();
+                    const scaleY = this.height / rect.height;
+                    const mouseY = (e.clientY - rect.top) * scaleY;
+                    // 鼠标控制桨球中心位置
+                    this.p1.y = Math.max(0, Math.min(this.height - this.p1.h, mouseY - this.p1.h / 2));
+                });
+
+                this.canvas.addEventListener('mousedown', e => {
+                    if (this.running && e.button === 0) { // 左键点击
+                        this.triggerSpecial();
+                    }
+                });
             }
 
             triggerSpecial() {
