@@ -122,7 +122,7 @@
                     medium: { aiSpeed: 320, error: 70, ballSpeed: 480 },
                     hard: { aiSpeed: 480, error: 25, ballSpeed: 620 }
                 };
-                this.curDiff = 'easy';
+                this.curDiff = 'medium';
 
                 // State
                 this.running = false;
@@ -172,6 +172,16 @@
             }
 
             initEvents() {
+                // 鼠标进出canvas事件 - 控制鼠标显示/隐藏
+                this.canvas.addEventListener('mouseenter', () => {
+                    if (this.running) {
+                        this.canvas.style.cursor = 'none';
+                    }
+                });
+                this.canvas.addEventListener('mouseleave', () => {
+                    this.canvas.style.cursor = 'default';
+                });
+
                 // 键盘事件
                 window.onkeydown = e => {
                     const key = e.key.toLowerCase();
@@ -451,6 +461,8 @@
                 this.resetBall();
                 requestAnimationFrame(t => this.loop(t));
                 document.getElementById('startBtn').innerText = '比赛进行中';
+                // 隐藏鼠标
+                this.canvas.style.cursor = 'none';
             }
 
             resetMatch() {
@@ -467,8 +479,10 @@
 
             endGame(win) {
                 this.running = false;
+                // 恢复鼠标显示
+                this.canvas.style.cursor = 'default';
                 this.playEndAnimation(win);
-            }
+}
 
             playEndAnimation(win) {
                 const startTime = performance.now();
