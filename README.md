@@ -67,7 +67,7 @@ npx http-server -p 8000
 
 ## 项目结构
 
-```
+```text
 .
 ├── index.html      # 主游戏文件（HTML + CSS + JS）
 ├── README.md       # 项目说明文档
